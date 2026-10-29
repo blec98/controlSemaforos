@@ -1,0 +1,14 @@
+.filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1rem; }
+.filtros > div { min-width: 150px; flex: 1; max-width: 220px; }
+
+.cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+.cifras p { margin: 0; }
+.cifra { font-size: 1.9rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+
+.dosColumnas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+
+.grafico { height: 280px; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0 0 0.5rem; padding: 0; list-style: none; font-size: 0.85rem; }
+.muestra { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 2px; margin-right: 0.35rem; vertical-align: -1px; }
+.tooltip { background: var(--superficie); border: 1px solid var(--borde); border-radius: 6px; padding: 0.5rem 0.65rem; font-size: 0.85rem; color: var(--texto); }
+.tooltip p { margin: 0; }
