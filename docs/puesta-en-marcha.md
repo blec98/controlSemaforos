@@ -10,7 +10,7 @@ Pasos para dejar funcionando la base de datos y el panel sobre el proyecto Supab
 Antes de ejecutarla se puede correr la prueba local de políticas, que no toca Supabase:
 
 ```bash
-npm run test:sql
+pnpm test:sql
 ```
 
 ## 2. Cuentas del personal
@@ -45,15 +45,28 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
 ## 4. Ejecutar
 
+El proyecto usa **pnpm**; la versión está fijada en `package.json` (`packageManager`). Si pnpm no está instalado, sirve el que trae Node con `corepack pnpm`.
+
+| Archivo | Qué hace |
+|---|---|
+| `iniciar-local.bat` | Instala lo que falte y abre el panel en http://localhost:3000, visible solo desde este equipo |
+| `iniciar-red.bat` | Lo mismo, pero accesible desde otros dispositivos de la misma red en `http://<IP del equipo>:3000`; muestra la IP al iniciar |
+
+Sin los `.bat`, lo mismo a mano:
+
 ```bash
-npm install
+pnpm install
 ```
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
-Abrir http://localhost:3000 e ingresar con una cuenta del personal. El contrato que debe cumplir Godot está en [api-ingesta.md](api-ingesta.md), con un `curl` para probar el monitoreo sin Godot.
+`pnpm dev:red` es el modo red, pero así Next no conoce la IP del equipo y bloquea la recarga en caliente desde otros dispositivos; por eso conviene `iniciar-red.bat`, que la pasa en `ORIGENES_DEV`.
+
+En modo red, la primera vez Windows pregunta si Node.js puede usar la red: hay que permitirlo **solo en redes privadas**, y la red Wi-Fi debe estar marcada como privada. Es un servidor de desarrollo, así que conviene usarlo solo en redes de confianza.
+
+Abrir el panel e ingresar con una cuenta del personal. El contrato que debe cumplir Godot está en [api-ingesta.md](api-ingesta.md), con un `curl` para probar el monitoreo sin Godot.
 
 ## 5. Publicar en Vercel
 

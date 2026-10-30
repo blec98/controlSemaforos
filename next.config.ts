@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // Solo afecta a `next dev`. iniciar-red.bat pone aquí la IP de este equipo para que
+  // Next acepte la recarga en caliente desde otros dispositivos de la red local.
+  allowedDevOrigins: process.env.ORIGENES_DEV ? process.env.ORIGENES_DEV.split(",") : [],
   async redirects() {
     return [{ source: "/", destination: "/monitoreo", permanent: false }];
   },

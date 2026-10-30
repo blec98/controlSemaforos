@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H localhost",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:sql": "node supabase/pruebas/rls.test.mjs"
+    "test:sql": "node supabase/pruebas/rls.test.mjs",
+    "dev:red": "next dev -H 0.0.0.0"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",
@@ -26,5 +27,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "typescript": "^5"
-  }
+  },
+  "packageManager": "pnpm@12.16.1"
 }

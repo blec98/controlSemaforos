@@ -1,0 +1,5 @@
+# Scripts de instalación de dependencias: se niegan salvo que se justifiquen.
+# unrs-resolver (lo usa eslint-config-next) solo descarga un binario de respaldo si
+# falta el de la plataforma, y ese ya llega como dependencia opcional.
+allowBuilds:
+  unrs-resolver: false
