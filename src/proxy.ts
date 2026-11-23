@@ -39,6 +39,8 @@ function redirigir(request: NextRequest, origen: NextResponse, destino: string) 
 }
 
 export const config = {
-  // La ingesta se autentica con su propio token y no lleva cookies de sesión.
-  matcher: ['/((?!api/ingesta|_next/static|_next/image|favicon.ico).*)'],
+  // Las rutas de /api/ se autentican solas con un token (la ingesta con el del cruce y
+  // /api/cuenta con el de la sesión de la app) y no llevan cookies: redirigirlas a
+  // /login rompería a Godot y a la app.
+  matcher: ['/((?!api/|_next/static|_next/image|favicon.ico).*)'],
 }

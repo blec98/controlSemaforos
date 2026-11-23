@@ -75,6 +75,7 @@ Los dos revisan que exista el archivo de variables, instalan las dependencias co
 
 - [Puesta en marcha](docs/puesta-en-marcha.md): base de datos, cuentas del personal, variables de entorno, ejecución, despliegue y lo que necesita saber la app móvil.
 - [Contrato de ingesta](docs/api-ingesta.md): qué envía Godot, cómo responde la web y los acuerdos con la maqueta.
+- [Contrato de la app móvil](docs/api-app.md): cómo se conecta la app Flutter a Supabase, qué ve cada rol, el flujo de incidencias y la eliminación de la cuenta.
 
 ## Seguridad
 
