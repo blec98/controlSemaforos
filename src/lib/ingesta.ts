@@ -86,6 +86,8 @@ export function filasDelLote(lote: Lote) {
       respaldo: e.fallback,
       motivo: e.motivo,
     })),
-    conteos: lote.conteos.map((c) => ({ cruce_id, ...c })),
+    // Dos filas con la misma clave en un mismo upsert hacen fallar el lote completo en
+    // Postgres, y Godot lo reintentaría para siempre. Se conserva la última de cada clave.
+    conteos: [...new Map(lote.conteos.map((c) => [`${c.acceso}|${c.minuto}|${c.tipo}`, { cruce_id, ...c }])).values()],
   }
 }

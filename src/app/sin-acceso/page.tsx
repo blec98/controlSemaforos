@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: 'Sin acceso' }
 // registrado en la app móvil que intenta entrar al panel.
 export default function SinAcceso() {
   return (
-    <main className="contenido" style={{ maxWidth: 520, paddingTop: '12vh' }}>
+    <main className="contenido pagina-estrecha">
       <h1>Esta sección no está disponible para tu cuenta</h1>
       <p className="tenue">
         El panel es para el personal de operación y análisis. Si deberías tener acceso, pide al administrador que asigne

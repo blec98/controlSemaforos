@@ -15,7 +15,10 @@ export const obtenerUsuario = cache(async (): Promise<Usuario> => {
   const claims = data?.claims
   if (!claims) redirect('/login')
 
-  const { data: perfil } = await supabase.from('perfiles').select('rol, nombre').eq('id', claims.sub).maybeSingle()
+  const { data: perfil, error } = await supabase.from('perfiles').select('rol, nombre').eq('id', claims.sub).maybeSingle()
+  // Si la base falla, no se asume "ciudadano": eso mandaría a un operador a /sin-acceso.
+  // El error lo muestra error.tsx con la opción de reintentar.
+  if (error) throw new Error('No se pudo leer el perfil del usuario')
   return {
     id: claims.sub,
     email: typeof claims.email === 'string' ? claims.email : '',

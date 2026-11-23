@@ -15,7 +15,7 @@ export function FormularioLogin() {
       )}
       <div className="campo">
         <label htmlFor="email">Correo</label>
-        <input id="email" name="email" type="email" autoComplete="username" required />
+        <input id="email" name="email" type="email" autoComplete="username" required defaultValue={estado.email ?? ''} />
       </div>
       <div className="campo">
         <label htmlFor="password">Contraseña</label>

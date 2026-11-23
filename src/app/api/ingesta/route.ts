@@ -27,8 +27,12 @@ export async function POST(request: Request) {
     return respuesta(401, { error: 'Token de cruce inválido' })
   }
 
+  // Se rechaza antes de leer el cuerpo si la cabecera ya declara que es muy grande,
+  // y se vuelve a medir en bytes por si la cabecera falta o miente.
+  const demasiado = { error: 'Lote demasiado grande; envía como máximo 512 KB' }
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_BYTES) return respuesta(413, demasiado)
   const texto = await request.text()
-  if (texto.length > MAX_BYTES) return respuesta(413, { error: 'Lote demasiado grande; envía como máximo 512 KB' })
+  if (Buffer.byteLength(texto) > MAX_BYTES) return respuesta(413, demasiado)
 
   let json: unknown
   try {

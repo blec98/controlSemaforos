@@ -31,7 +31,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   if (!z.uuid().safeParse(id).success) notFound()
 
   const supabase = await crearClienteServidor()
-  const [{ data: incidencia }, { data: historial }] = await Promise.all([
+  const [{ data: incidencia, error: e1 }, { data: historial, error: e2 }] = await Promise.all([
     supabase.from('incidencias').select('*').eq('id', id).maybeSingle(),
     supabase
       .from('incidencias_historial')
@@ -39,6 +39,8 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
       .eq('incidencia_id', id)
       .order('cambiado_en'),
   ])
+  // Un fallo de la base no debe verse como "no existe" ni como "sin cambios": lo muestra error.tsx.
+  if (e1 || e2) throw new Error('No se pudo leer la incidencia')
   if (!incidencia) notFound()
   const datos = incidencia as Incidencia
   const cambios = (historial as CambioIncidencia[] | null) ?? []
@@ -59,7 +61,10 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
   return (
     <>
       <h1>
-        {NOMBRE_TIPO_INCIDENCIA[datos.tipo]} <span className={`chip ${estilos[datos.estado]}`} style={{ fontSize: '1rem', verticalAlign: 'middle' }}>{NOMBRE_ESTADO_INCIDENCIA[datos.estado]}</span>
+        {NOMBRE_TIPO_INCIDENCIA[datos.tipo]}
+        <span className={`chip ${estilos.estadoTitulo} ${estilos[datos.estado]} ${datos.estado === 'en_revision' ? 'chip-anillo' : ''}`}>
+          {NOMBRE_ESTADO_INCIDENCIA[datos.estado]}
+        </span>
       </h1>
 
       <div className={estilos.detalle}>
@@ -85,7 +90,8 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
           {datos.estado !== 'resuelta' && (
             <section className="tarjeta" aria-labelledby="titulo-gestion">
               <h2 id="titulo-gestion">Gestionar</h2>
-              <FormularioEstado id={datos.id} estadoActual={datos.estado} tieneFoto={Boolean(datos.foto_path)} />
+              {/* key: al cambiar el estado el formulario se arma de nuevo con sus opciones válidas. */}
+              <FormularioEstado key={datos.estado} id={datos.id} estadoActual={datos.estado} tieneFoto={Boolean(datos.foto_path)} />
             </section>
           )}
 

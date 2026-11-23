@@ -37,7 +37,7 @@ async function Contenido() {
 async function cargarMonitoreo() {
   const supabase = await crearClienteServidor()
 
-  const [{ data: estado }, { data: eventos }, { data: cruce }] = await Promise.all([
+  const [{ data: estado, error: e1 }, { data: eventos, error: e2 }, { data: cruce, error: e3 }] = await Promise.all([
     supabase.from('estado_cruce').select('*').eq('cruce_id', CRUCE_ID).maybeSingle(),
     supabase
       .from('eventos_fase')
@@ -47,6 +47,8 @@ async function cargarMonitoreo() {
       .limit(15),
     supabase.from('cruces').select('nombre').eq('id', CRUCE_ID).maybeSingle(),
   ])
+  // Un fallo de la base no debe verse como "el cruce no tiene datos": lo muestra error.tsx.
+  if (e1 || e2 || e3) throw new Error('No se pudo leer el estado del cruce')
 
   // La antigüedad se calcula aquí, con el reloj del servidor, y no en el navegador:
   // el reloj del equipo del operador puede estar desfasado varios segundos.

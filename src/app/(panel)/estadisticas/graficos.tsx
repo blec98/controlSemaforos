@@ -1,14 +1,15 @@
 'use client'
 
+import { useId } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts'
 import type { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent'
 import { NOMBRE_TIPO_VEHICULO, numero } from '@/lib/etiquetas'
 import { TIPOS_VEHICULO, type PorTipo, type TipoVehiculo } from '@/lib/tipos'
 import estilos from './estadisticas.module.css'
 
-// Un color por tipo de vehículo, siempre el mismo sin importar el filtro. Son las tres
-// primeras posiciones de la paleta categórica validada para daltonismo; el aqua queda
-// bajo 3:1 en modo claro, por eso cada gráfico ofrece su tabla de datos.
+// Un color por tipo de vehículo, siempre el mismo sin importar el filtro. Es una sola
+// gama de azules ordenada por luminosidad: verde y naranja se confundían con las luces
+// del semáforo. El tono más claro queda bajo 3:1, así que cada gráfico trae su tabla.
 const COLOR: Record<TipoVehiculo, string> = { auto: 'var(--serie-1)', camioneta: 'var(--serie-2)', bus: 'var(--serie-3)' }
 
 type Props = {
@@ -51,10 +52,11 @@ function etiquetaPeriodo(periodo: string, unidad: 'hour' | 'day') {
 type Fila = { etiqueta: string } & PorTipo
 
 function Grafico({ titulo, descripcion, datos, columnaEtiqueta }: { titulo: string; descripcion?: string; datos: Fila[]; columnaEtiqueta: string }) {
+  const id = useId()
   return (
-    <section className="tarjeta" aria-label={titulo}>
-      <h2>{titulo}</h2>
-      {descripcion && <p className="tenue" style={{ fontSize: '0.85rem' }}>{descripcion}</p>}
+    <section className="tarjeta" aria-labelledby={id}>
+      <h2 id={id}>{titulo}</h2>
+      {descripcion && <p className="nota">{descripcion}</p>}
       <ul className={estilos.leyenda} aria-label="Leyenda">
         {TIPOS_VEHICULO.map((t) => (
           <li key={t}>
@@ -80,7 +82,7 @@ function Grafico({ titulo, descripcion, datos, columnaEtiqueta }: { titulo: stri
       {/* El gráfico se oculta al lector de pantalla; esta tabla es su versión accesible. */}
       <details>
         <summary>Ver tabla de datos</summary>
-        <div className="tabla-envoltura">
+        <div className="tabla-envoltura" role="region" aria-label={`Datos de ${titulo}`} tabIndex={0}>
           <table>
             <thead>
               <tr>
@@ -114,7 +116,7 @@ function DetalleBarra({ active, payload, label }: TooltipContentProps<ValueType,
   const total = payload.reduce((suma, p) => suma + (Number(p.value) || 0), 0)
   return (
     <div className={estilos.tooltip}>
-      <p style={{ fontWeight: 600 }}>{label}</p>
+      <p className={estilos.tooltipTitulo}>{label}</p>
       {[...payload].reverse().map((p) => (
         <p key={String(p.dataKey)}>
           <span className={estilos.muestra} style={{ background: p.color }} aria-hidden="true" />

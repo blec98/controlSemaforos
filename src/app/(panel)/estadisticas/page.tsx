@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { Suspense } from 'react'
 import { z } from 'zod'
 import { CRUCE_ID } from '@/lib/config'
-import { hoyEnChile, NOMBRE_ACCESO, NOMBRE_MOTIVO, NOMBRE_TIPO_VEHICULO, numero, restarDias } from '@/lib/etiquetas'
+import { hora, hoyEnChile, NOMBRE_ACCESO, NOMBRE_MOTIVO, NOMBRE_TIPO_VEHICULO, numero, restarDias } from '@/lib/etiquetas'
 import { exigirRol } from '@/lib/sesion'
 import { crearClienteServidor } from '@/lib/supabase/servidor'
-import { ACCESOS, TIPOS_VEHICULO, type Estadisticas, type Motivo } from '@/lib/tipos'
+import { ACCESOS, TIPOS_VEHICULO, type Acceso, type Estadisticas, type Motivo, type PorTipo } from '@/lib/tipos'
 import { Graficos } from './graficos'
 import estilos from './estadisticas.module.css'
 
@@ -13,12 +14,17 @@ export const metadata: Metadata = { title: 'Estadísticas' }
 
 type Busqueda = Promise<Record<string, string | string[] | undefined>>
 
-const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-const filtros = z.object({
-  desde: fecha.optional(),
-  hasta: fecha.optional(),
-  acceso: z.enum(['N', 'E', 'S', 'W']).optional(),
-})
+// Cada filtro se valida por separado: un campo vacío o inválido no debe descartar los
+// demás. Antes, elegir "Todos" en acceso enviaba `acceso=` y se perdían las fechas.
+const vacioAIndefinido = (v: unknown) => (v === '' || Array.isArray(v) ? undefined : v)
+const fecha = z.preprocess(vacioAIndefinido, z.iso.date().optional())
+const acceso = z.preprocess(vacioAIndefinido, z.enum(['N', 'E', 'S', 'W']).optional())
+
+const ATAJOS = [
+  { texto: 'Hoy', dias: 0 },
+  { texto: 'Últimos 7 días', dias: 6 },
+  { texto: 'Últimos 30 días', dias: 29 },
+]
 
 export default function PaginaEstadisticas({ searchParams }: { searchParams: Busqueda }) {
   return (
@@ -31,56 +37,114 @@ export default function PaginaEstadisticas({ searchParams }: { searchParams: Bus
   )
 }
 
+function leerFiltros(params: Record<string, string | string[] | undefined>) {
+  const hoy = hoyEnChile()
+  const d = fecha.safeParse(params.desde)
+  const h = fecha.safeParse(params.hasta)
+  const a = acceso.safeParse(params.acceso)
+  return {
+    hoy,
+    // Por defecto, los últimos siete días contando hoy.
+    desde: (d.success && d.data) || restarDias(hoy, 6),
+    hasta: (h.success && h.data) || hoy,
+    acceso: a.success ? (a.data as Acceso | undefined) : undefined,
+    invalidos: [!d.success && 'desde', !h.success && 'hasta', !a.success && 'acceso'].filter(Boolean) as string[],
+    calculadoEn: new Date().toISOString(),
+  }
+}
+
+// La función SQL solo devuelve los períodos con conteos. Se completan con ceros para
+// que una hora o un día sin vehículos (o con la detección caída) se vea como un hueco.
+function completarSerie(serie: Estadisticas['serie'], unidad: Estadisticas['unidad'], desde: string, hasta: string) {
+  const porPeriodo = new Map(serie.map((f) => [f.periodo, f]))
+  // sv-SE formatea como AAAA-MM-DD HH:MM, el mismo orden que usan los períodos.
+  const ahora = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Santiago', dateStyle: 'short', timeStyle: 'short' })
+    .format(new Date())
+    .replace(' ', 'T')
+  const completa: ({ periodo: string } & PorTipo)[] = []
+  for (let dia = desde; dia <= hasta; dia = restarDias(dia, -1)) {
+    const horas = unidad === 'hour' ? Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`) : ['00:00']
+    for (const h of horas) {
+      const periodo = `${dia}T${h}`
+      if (unidad === 'hour' && periodo > ahora) break
+      completa.push(porPeriodo.get(periodo) ?? { periodo, auto: 0, camioneta: 0, bus: 0 })
+    }
+  }
+  return completa
+}
+
 async function Contenido({ searchParams }: { searchParams: Busqueda }) {
   await exigirRol('operador', 'analista')
-  const leidos = filtros.safeParse(await searchParams)
-  const hoy = hoyEnChile()
-  // Por defecto, los últimos siete días contando hoy.
-  const desde = (leidos.success && leidos.data.desde) || restarDias(hoy, 6)
-  const hasta = (leidos.success && leidos.data.hasta) || hoy
-  const acceso = leidos.success ? leidos.data.acceso : undefined
+  const filtros = leerFiltros(await searchParams)
+  const { hoy, desde, hasta, invalidos, calculadoEn } = filtros
+  const accesoElegido = filtros.acceso
 
   const supabase = await crearClienteServidor()
   const { data, error } = await supabase.rpc('estadisticas_trafico', {
     p_cruce: CRUCE_ID,
     p_desde: desde,
     p_hasta: hasta,
-    p_acceso: acceso ?? null,
+    p_acceso: accesoElegido ?? null,
   })
+  const datos = data as Estadisticas | null
 
   return (
     <div className="grilla">
-      <form className={`tarjeta ${estilos.filtros}`} method="get">
-        <div>
-          <label htmlFor="desde">Desde</label>
-          <input id="desde" name="desde" type="date" defaultValue={desde} max={hoy} />
-        </div>
-        <div>
-          <label htmlFor="hasta">Hasta</label>
-          <input id="hasta" name="hasta" type="date" defaultValue={hasta} max={hoy} />
-        </div>
-        <div>
-          <label htmlFor="acceso">Acceso</label>
-          <select id="acceso" name="acceso" defaultValue={acceso ?? ''}>
-            <option value="">Todos</option>
-            {ACCESOS.map((a) => (
-              <option key={a} value={a}>
-                {NOMBRE_ACCESO[a]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button className="boton boton-principal" type="submit">Aplicar</button>
-      </form>
+      <div className={estilos.filtros}>
+        <nav aria-label="Períodos rápidos" className={estilos.atajos}>
+          {ATAJOS.map(({ texto, dias }) => {
+            const desdeAtajo = restarDias(hoy, dias)
+            const activo = desde === desdeAtajo && hasta === hoy
+            const query = new URLSearchParams({ desde: desdeAtajo, hasta: hoy, ...(accesoElegido ? { acceso: accesoElegido } : {}) })
+            return (
+              <Link key={texto} href={`/estadisticas?${query}`} aria-current={activo ? 'true' : undefined}>
+                {texto}
+              </Link>
+            )
+          })}
+        </nav>
+        <form method="get" className={estilos.formulario}>
+          <div>
+            <label htmlFor="desde">Desde</label>
+            <input id="desde" name="desde" type="date" defaultValue={desde} max={hoy} />
+          </div>
+          <div>
+            <label htmlFor="hasta">Hasta</label>
+            <input id="hasta" name="hasta" type="date" defaultValue={hasta} max={hoy} />
+          </div>
+          <div>
+            <label htmlFor="acceso">Acceso</label>
+            <select id="acceso" name="acceso" defaultValue={accesoElegido ?? ''}>
+              <option value="">Todos</option>
+              {ACCESOS.map((a) => (
+                <option key={a} value={a}>
+                  {NOMBRE_ACCESO[a]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button className="boton boton-principal" type="submit">Aplicar</button>
+        </form>
+        <p className="nota">
+          Datos calculados a las <span className="num">{hora(calculadoEn)}</span> · para actualizarlos, vuelve a aplicar el filtro
+        </p>
+      </div>
 
-      {!leidos.success && <p className="mensaje mensaje-aviso">Algún filtro no era válido; se usaron los valores por defecto.</p>}
-      {error ? (
+      {invalidos.length > 0 && (
+        <p className="mensaje mensaje-aviso">
+          <strong>Aviso:</strong> el filtro {invalidos.join(' y ')} no era válido; se usó el valor por defecto.
+        </p>
+      )}
+      {error || !datos ? (
         // Los errores de rango vienen redactados desde la función SQL; los demás no se muestran tal cual.
         <p className="mensaje mensaje-alerta" role="alert">
-          {error.code === '22023' ? error.message : 'No se pudieron calcular las estadísticas. Intenta de nuevo.'}
+          {error?.code === '22023' ? error.message : 'No se pudieron calcular las estadísticas. Intenta de nuevo.'}
         </p>
       ) : (
-        <Resultados datos={data as Estadisticas} filtradoPorAcceso={Boolean(acceso)} />
+        <Resultados
+          datos={{ ...datos, serie: completarSerie(datos.serie, datos.unidad, desde, hasta) }}
+          filtradoPorAcceso={Boolean(accesoElegido)}
+        />
       )}
     </div>
   )
@@ -94,17 +158,17 @@ function Resultados({ datos, filtradoPorAcceso }: { datos: Estadisticas; filtrad
   return (
     <>
       <section className={estilos.cifras} aria-label="Resumen del período">
-        <div className="tarjeta">
+        <div>
           <p className={estilos.cifra}>{numero.format(datos.total)}</p>
-          <p className="tenue">Vehículos contados{filtradoPorAcceso && ' en el acceso'}</p>
+          <p className="nota">Vehículos contados{filtradoPorAcceso && ' en el acceso'}</p>
         </div>
-        <div className="tarjeta">
+        <div>
           <p className={estilos.cifra}>{numero.format(sinDemanda)}</p>
-          <p className="tenue">Verdes cortados por falta de demanda</p>
+          <p className="nota">Verdes cortados por falta de demanda</p>
         </div>
-        <div className="tarjeta">
+        <div>
           <p className={estilos.cifra}>{porcentaje === null ? '—' : `${porcentaje} %`}</p>
-          <p className="tenue">de los {numero.format(totalCortes)} cortes de verde fueron sin demanda</p>
+          <p className="nota">de los {numero.format(totalCortes)} cortes de verde fueron sin demanda</p>
         </div>
       </section>
 
@@ -118,6 +182,7 @@ function Resultados({ datos, filtradoPorAcceso }: { datos: Estadisticas; filtrad
         <section className="tarjeta" aria-labelledby="titulo-totales">
           <h2 id="titulo-totales">Totales del período</h2>
           <table>
+            <caption className="solo-lector">Vehículos por acceso</caption>
             <thead>
               <tr>
                 <th scope="col">Acceso</th>
@@ -133,7 +198,8 @@ function Resultados({ datos, filtradoPorAcceso }: { datos: Estadisticas; filtrad
               ))}
             </tbody>
           </table>
-          <table style={{ marginTop: '1rem' }}>
+          <table className={estilos.siguiente}>
+            <caption className="solo-lector">Vehículos por tipo</caption>
             <thead>
               <tr>
                 <th scope="col">Tipo de vehículo</th>
@@ -153,11 +219,17 @@ function Resultados({ datos, filtradoPorAcceso }: { datos: Estadisticas; filtrad
 
         <section className="tarjeta" aria-labelledby="titulo-cortes">
           <h2 id="titulo-cortes">Cortes de verde por motivo</h2>
-          <p className="tenue" style={{ fontSize: '0.85rem' }}>Corresponden al cruce completo, aunque se filtre un acceso.</p>
+          <p className="nota">Corresponden al cruce completo, aunque se filtre un acceso.</p>
           {totalCortes === 0 ? (
             <p className="tenue">Sin cortes registrados en el período.</p>
           ) : (
             <table>
+              <thead>
+                <tr>
+                  <th scope="col">Motivo</th>
+                  <th scope="col" className="num">Cortes</th>
+                </tr>
+              </thead>
               <tbody>
                 {(Object.entries(datos.cortes) as [Motivo | 'sin_motivo', number][])
                   .sort((a, b) => b[1] - a[1])

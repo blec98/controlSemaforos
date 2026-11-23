@@ -1,34 +1,37 @@
-.encabezado { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 1rem; }
+.encabezado { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 1.25rem; }
 
 /* El cruce se dibuja como una cruz: norte arriba, sur abajo, poniente a la izquierda
-   y oriente a la derecha, igual que la cámara inicial del modelo 3D. */
+   y oriente a la derecha, igual que la cámara inicial del modelo 3D. Sin bordes por
+   acceso: la tarjeta ya enmarca y el espacio separa. */
 .cruce {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-areas: ". n ." "w c e" ". s .";
-  gap: 0.75rem;
+  gap: 1.5rem 1rem;
 }
 .accesoN { grid-area: n; }
 .accesoE { grid-area: e; }
 .accesoS { grid-area: s; }
 .accesoW { grid-area: w; }
 
-.acceso {
-  display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-start;
-  padding: 0.75rem; border: 1px solid var(--borde); border-radius: 8px;
-}
-.acceso[data-atenuado] { opacity: 0.55; }
-.nombreAcceso { font-weight: 600; }
+.acceso { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; text-align: center; padding: 0.5rem; }
+.nombreAcceso { font-size: 0.875rem; color: var(--texto-tenue); }
 
-.verde { color: var(--luz-verde); font-weight: 600; }
-.amarillo { color: var(--luz-amarillo); font-weight: 600; }
-.rojo { color: var(--luz-rojo); font-weight: 600; }
+/* La luz es lo que se mira primero: es el texto más grande de la tarjeta. */
+.luz { font-size: 1.3rem; font-weight: 600; gap: 0.5rem; }
+.luz::before { width: 1rem; height: 1rem; }
+.verde { color: var(--luz-verde); }
+.amarillo { color: var(--luz-amarillo); }
+.rojo { color: var(--luz-rojo); }
+.sinConfirmar { font-size: 0.8rem; font-weight: 400; color: var(--texto-tenue); }
+.vehiculos { font-size: 1.05rem; }
 
-.centro { grid-area: c; margin: 0; padding: 0.75rem; display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.75rem; align-content: center; font-size: 0.9rem; }
+.centro { grid-area: c; margin: 0; padding: 0.5rem; display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; align-content: center; font-size: 0.9rem; }
 .centro dt { color: var(--texto-tenue); }
 .centro dd { margin: 0; }
+.etapa { font-size: 1.1rem; font-weight: 600; }
 
-/* En pantallas angostas la cruz no cabe legible: se pasa a una lista. */
+/* En pantallas angostas la cruz no cabe legible: se pasa a dos columnas. */
 @media (max-width: 640px) {
-  .cruce { grid-template-columns: 1fr; grid-template-areas: "c" "n" "e" "s" "w"; }
+  .cruce { grid-template-columns: 1fr 1fr; grid-template-areas: "c c" "n e" "s w"; }
 }

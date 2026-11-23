@@ -1,20 +1,23 @@
-.vistas { display: flex; gap: 1rem; }
+.vistas { display: flex; gap: 1.25rem; }
 .vistas a { text-decoration: none; color: var(--texto-tenue); padding: 0.25rem 0; }
 .vistas a[aria-current="page"] { color: var(--texto); font-weight: 600; box-shadow: inset 0 -2px 0 var(--texto); }
 
-/* Se corta en dos líneas para que la tabla no crezca con descripciones largas. */
+/* Se corta en dos líneas para que la tabla no crezca con descripciones largas. El corte
+   va en un div: aplicado al td lo sacaba de la tabla y desalineaba las filas. */
 .descripcion { max-width: 32rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.recibida { color: var(--luz-rojo); }
-.en_revision { color: var(--luz-amarillo); }
+/* Estados de incidencia en neutro y por forma: el rojo y el amarillo quedan reservados
+   para las luces del semáforo. Recibida = punto lleno y negrita; en revisión = anillo;
+   resuelta = tenue. */
+.recibida { color: var(--texto); font-weight: 600; }
+.en_revision { color: var(--texto); }
 .resuelta { color: var(--texto-tenue); }
+.estadoTitulo { font-size: 1rem; font-weight: 400; vertical-align: middle; margin-left: 0.5rem; }
 
-.detalle { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; align-items: start; }
-.datos { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem; margin: 0; }
+.detalle { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem; align-items: start; }
+.datos { display: grid; grid-template-columns: auto 1fr; gap: 0.4rem 1rem; margin: 0; }
 .datos dt { color: var(--texto-tenue); }
 .datos dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.foto { max-width: 100%; border-radius: 6px; border: 1px solid var(--borde); margin-top: 1rem; display: block; }
-.historial { list-style: none; margin: 0; padding: 0; }
-.historial li { padding: 0.6rem 0; border-bottom: 1px solid var(--borde); }
-.historial li:last-child { border-bottom: 0; }
+.foto { max-width: 100%; border-radius: 6px; margin-top: 1.25rem; display: block; }
+.historial { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
 .historial p { margin: 0.2rem 0 0; }
