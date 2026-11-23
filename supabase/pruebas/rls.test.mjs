@@ -5,9 +5,11 @@
 // Límite: aquí postgres es superusuario y en Supabase no. Lo que esto prueba son las
 // políticas y los permisos vistos desde anon y authenticated, no la instalación en Supabase.
 import { PGlite } from '@electric-sql/pglite'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 
-const migracion = readFileSync(new URL('../migrations/20261029000000_esquema_inicial.sql', import.meta.url), 'utf8')
+// Todas las migraciones, en el orden de su nombre (la fecha va primero), igual que en Supabase.
+const carpeta = new URL('../migrations/', import.meta.url)
+const migraciones = readdirSync(carpeta).filter((f) => f.endsWith('.sql')).sort()
 const db = new PGlite()
 
 const stubs = `
@@ -21,7 +23,7 @@ create function auth.uid() returns uuid language sql stable
 grant usage on schema auth to anon, authenticated;
 create schema storage;
 create table storage.buckets (id text primary key, name text, public bool, file_size_limit bigint, allowed_mime_types text[]);
-create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
+create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, created_at timestamptz default now());
 alter table storage.objects enable row level security;
 grant usage on schema storage to authenticated;
 grant select, insert, delete on storage.objects to authenticated;
@@ -51,8 +53,10 @@ async function como(uid, sql, params) {
 }
 
 await db.exec(stubs)
-await db.exec(migracion)
-console.log('Migración aplicada sin errores')
+for (const archivo of migraciones) {
+  await db.exec(readFileSync(new URL(archivo, carpeta), 'utf8'))
+  console.log(`Migración aplicada sin errores: ${archivo}`)
+}
 
 for (const [id, email] of [[A, 'a@x.cl'], [B, 'b@x.cl'], [O, 'o@x.cl'], [N, 'n@x.cl']]) {
   await db.query('insert into auth.users (id, email) values ($1, $2)', [id, email])
@@ -171,6 +175,74 @@ r = await como(B, `select name from storage.objects`)
 ok(r.filas?.length === 0, 'B no ve la foto de A')
 r = await como(O, `delete from storage.objects where bucket_id = 'incidencias' returning name`)
 ok(r.filas?.length === 1, 'operador puede borrar la foto')
+
+// --- Correcciones de la auditoría (migración 20261124000000) ---------------------
+// A11: fotos
+await db.query(`insert into storage.objects (bucket_id, name) values ('incidencias', $1)`, [`${A}/g.jpg`])
+r = await como(B, `delete from storage.objects where name = $1 returning name`, [`${A}/g.jpg`])
+ok(r.filas?.length === 0, 'B no puede borrar la foto de A')
+r = await como(N, `select name from storage.objects`)
+ok(r.filas?.length === 0, 'el analista no ve fotos del bucket')
+
+// A4: tope de subidas
+let subidas = 0
+for (let i = 1; i <= 5; i++) {
+  r = await como(B, `insert into storage.objects (bucket_id, name) values ('incidencias', $1)`, [`${B}/s${i}.jpg`])
+  if (!r.error) subidas++
+}
+r = await como(B, `insert into storage.objects (bucket_id, name) values ('incidencias', $1)`, [`${B}/s6.jpg`])
+ok(subidas === 5 && r.error?.includes('row-level security'), 'la sexta subida en 24 h se rechaza (A4)')
+await db.query(`update storage.objects set created_at = now() - interval '2 days' where name like $1`, [`${B}/%`])
+r = await como(B, `insert into storage.objects (bucket_id, name) values ('incidencias', $1)`, [`${B}/s7.jpg`])
+ok(!r.error, 'las subidas de hace más de 24 h no cuentan')
+
+// A11: historial inmutable
+r = await como(O, `update public.incidencias_historial set nota = 'cambiada'`)
+ok(r.error?.includes('permission denied'), 'nadie puede editar el historial, ni el operador')
+r = await como(O, `delete from public.incidencias_historial`)
+ok(r.error?.includes('permission denied'), 'nadie puede borrar el historial, ni el operador')
+
+// A7: estados válidos en el historial
+x = await db.query(`insert into public.incidencias_historial (incidencia_id, estado_anterior, estado_nuevo) values ($1, 'abierta', 'resuelta')`, [incA]).catch((err) => err)
+ok(x instanceof Error && x.message.includes('estado_anterior_valido'), 'el historial rechaza estados inexistentes (A7)')
+
+// A11 y A8: checks del estado en vivo
+x = await db.query(`update public.estado_cruce set detectados = '{1,0,0}'`).catch((err) => err)
+ok(x instanceof Error && x.message.includes('check'), 'detectados exige cuatro posiciones')
+x = await db.query(`update public.estado_cruce set activos = '{N,N}'`).catch((err) => err)
+ok(x instanceof Error && x.message.includes('activos_sin_repetir'), 'estado_cruce rechaza accesos repetidos (A8)')
+x = await db.query(`insert into public.eventos_fase (cruce_id, ocurrido_en, etapa, activos, modo_activo) values ('maqueta-01', now(), 'GREEN', '{E,E}', 'fti')`).catch((err) => err)
+ok(x instanceof Error && x.message.includes('activos_sin_repetir'), 'eventos_fase rechaza accesos repetidos (A8)')
+await db.exec('set role service_role')
+x = await db.query(`update public.estado_cruce set activos = '{N,S}', reportado_en = now()`).catch((err) => err)
+await db.exec('reset role')
+ok(!(x instanceof Error), `la ingesta (service_role) puede evaluar el check de accesos ${x instanceof Error ? x.message : ''}`)
+
+// A10: un latido viejo no pisa el estado
+await db.exec(`update public.estado_cruce set etapa = 'GREEN', reportado_en = now()`)
+await db.exec(`update public.estado_cruce set etapa = 'ALL_RED', reportado_en = now() - interval '10 seconds'`)
+x = await db.query(`select etapa from public.estado_cruce`)
+ok(x.rows[0].etapa === 'GREEN', 'un latido reenviado (hasta 1 min más viejo) se descarta (A10)')
+await db.exec(`update public.estado_cruce set etapa = 'YELLOW', reportado_en = now() + interval '1 second'`)
+x = await db.query(`select etapa from public.estado_cruce`)
+ok(x.rows[0].etapa === 'YELLOW', 'un latido más nuevo sí actualiza')
+await db.exec(`update public.estado_cruce set etapa = 'ALL_RED', reportado_en = now() - interval '2 hours'`)
+x = await db.query(`select etapa from public.estado_cruce`)
+ok(x.rows[0].etapa === 'ALL_RED', 'si el reloj de Godot se corrige hacia atrás, el latido pasa')
+
+// A3: el límite de reportes toma un candado por autor antes de contar
+x = await db.query(`select pg_get_functiondef('privado.limitar_reportes'::regproc) as def`)
+ok(x.rows[0].def.includes('pg_advisory_xact_lock'), 'el límite de reportes serializa por autor (A3)')
+
+// A6: lo que se cree después en public nace cerrado
+await db.exec(`create table public.tabla_nueva (id int); create function public.funcion_nueva() returns int language sql as 'select 1';`)
+r = await como('anon', `select * from public.tabla_nueva`)
+const anonCerrado = Boolean(r.error?.includes('permission denied'))
+r = await como(A, `select * from public.tabla_nueva`)
+const authCerrado = Boolean(r.error?.includes('permission denied'))
+r = await como(A, `select public.funcion_nueva()`)
+ok(anonCerrado && authCerrado && r.error?.includes('permission denied'), 'tablas y funciones nuevas nacen sin permisos para anon y authenticated (A6)')
+await db.exec(`drop table public.tabla_nueva; drop function public.funcion_nueva();`)
 
 // Supresión (RF8)
 await db.query('delete from auth.users where id = $1', [A])

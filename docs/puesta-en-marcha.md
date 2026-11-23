@@ -6,12 +6,21 @@ Pasos para dejar funcionando la base de datos y el panel sobre el proyecto Supab
 
 1. En Supabase, abrir **SQL Editor**, pegar completo `supabase/migrations/20261029000000_esquema_inicial.sql` y ejecutarlo una sola vez. Crea las tablas con RLS, las funciones, el bucket privado `incidencias`, la publicación de tiempo real y el cruce `maqueta-01` con sus cuatro accesos.
 2. En **Authentication > Sign In / Providers > Email**, dejar activo **Confirm email**. Es la verificación de correo de M7: sin ella cualquiera crea cuentas en masa desde la app.
+3. Después, y una sola vez, ejecutar `supabase/migrations/20261124000000_correcciones_auditoria.sql` (correcciones A3, A4 y A6 a A10 de la auditoría del 23-11-2026). Las migraciones nunca se editan después de aplicadas: cada cambio va en un archivo nuevo con fecha posterior.
 
-Antes de ejecutarla se puede correr la prueba local de políticas, que no toca Supabase:
+Antes de ejecutar cualquier migración se corre la prueba local, que aplica todas en orden sobre un Postgres en memoria y no toca Supabase:
 
 ```bash
 pnpm test:sql
 ```
+
+Después de aplicar la migración del 24-11, comprobar en el SQL Editor lo que la prueba local no puede ver. El tope de 5 fotos en 24 horas (A4) cuenta con una función que necesita que `postgres` pase por alto RLS en `storage.objects`; si no lo hace, el conteo da 0 en silencio y el tope no se aplica:
+
+```sql
+select rolbypassrls from pg_roles where rolname = 'postgres';
+```
+
+Debe responder `true`. La prueba definitiva es funcional: con una cuenta de ciudadano, subir 6 fotos a su carpeta del bucket `incidencias` en el mismo día; la sexta debe ser rechazada.
 
 ## 2. Cuentas del personal
 
@@ -70,13 +79,27 @@ Abrir el panel e ingresar con una cuenta del personal. El contrato que debe cump
 
 ## 5. Publicar en Vercel
 
-Importar el repositorio en Vercel y cargar las mismas cuatro variables en **Settings > Environment Variables**. Las variables `NEXT_PUBLIC_` se incrustan al compilar, así que después de cambiarlas hay que volver a desplegar.
+Importar el repositorio en Vercel y cargar las mismas cuatro variables en **Settings > Environment Variables**. Las variables `NEXT_PUBLIC_` se incrustan al compilar, así que después de cambiarlas hay que volver a desplegar. `NEXT_PUBLIC_SUPABASE_URL` también la usa `next.config.ts` para armar la Content-Security-Policy: sin ella, el panel no podría conectarse a Supabase.
 
-## Lo que la app móvil debe saber
+`Strict-Transport-Security` no hace falta configurarlo: Vercel ya lo entrega en producción (`max-age=63072000; includeSubDomains; preload`).
 
-- Al reportar, la app inserta solo `cruce_id`, `tipo`, `descripcion` y `foto_path`. `estado`, `autor_id` y las fechas los pone la base; enviarlos devuelve un error de permisos.
-- `tipo` admite `luz_apagada`, `intermitente`, `tiempo_anomalo`, `dano_fisico` y `otro`.
-- La foto se sube primero a `incidencias/<id del usuario>/<archivo>` (JPEG, PNG o WebP, máximo 5 MB) y esa ruta va en `foto_path`.
-- Hay un máximo de 5 reportes por cuenta en 24 horas.
-- La tabla `incidencias` está en tiempo real: la app puede escuchar los cambios de estado de sus propias incidencias.
-- Eliminar la cuenta (RF8) requiere borrar el usuario de `auth.users` con la llave secreta y sus fotos con la API de Storage; la base borra en cascada perfil, incidencias e historial. Ese endpoint todavía no existe.
+### Límites de solicitudes (A1)
+
+Ninguna de las dos rutas públicas tiene límite en el código: en Vercel cada solicitud puede caer en una instancia distinta, así que un contador en memoria no sirve. El límite se configura en las plataformas.
+
+- **`/api/ingesta`, en Vercel.** En **Firewall**, crear una regla: si la ruta es `/api/ingesta`, aplicar *Rate Limit* por IP de 10 solicitudes por segundo y responder 429. Godot envía cerca de 1 por segundo, así que no lo afecta. Revisar en el panel que el plan de la cuenta permita reglas con límite de tasa. El token de ingesta (32 bytes aleatorios) no se puede adivinar por fuerza bruta en ningún plazo realista; el límite evita sobre todo que alguien con el token robado inunde la base con lotes de 512 KB.
+- **Inicio de sesión, en Supabase.** En **Authentication > Rate Limits**, revisar el límite de inicios de sesión por IP y anotarlo aquí: ____ por ____.
+
+Para comprobar la regla de Vercel, 50 solicitudes seguidas con un token inválido deben terminar en 429:
+
+```bash
+for i in $(seq 1 50); do curl -s -o /dev/null -w "%{http_code} " -X POST -H "Authorization: Bearer invalido" https://control-semaforos.vercel.app/api/ingesta; done
+```
+
+### Integración continua
+
+Cada push y cada PR a `main` corren `.github/workflows/ci.yml`: instalación con el lockfile, ESLint, TypeScript y `pnpm test:sql`. No necesita secretos, porque no toca Supabase.
+
+## App móvil
+
+Todo lo que necesita la app Flutter está en [api-app.md](api-app.md): conexión, qué ve cada rol, el flujo de incidencias, los errores y `DELETE /api/cuenta` para eliminar la cuenta (RF8).

@@ -1,0 +1,40 @@
+# Revisa cada push y cada PR a main: dependencias con el lockfile, ESLint, TypeScript y
+# las pruebas de políticas SQL (PGlite, sin tocar Supabase). No usa secretos.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # pnpm sale de "packageManager" en package.json (12.16.1) mediante corepack,
+      # así CI usa exactamente la misma versión que el equipo.
+      - name: Activar pnpm
+        run: corepack enable
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint
+        run: pnpm lint
+
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
+
+      - name: Pruebas de políticas SQL
+        run: pnpm test:sql
