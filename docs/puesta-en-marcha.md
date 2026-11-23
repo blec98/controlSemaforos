@@ -22,6 +22,24 @@ select rolbypassrls from pg_roles where rolname = 'postgres';
 
 Debe responder `true`. La prueba definitiva es funcional: con una cuenta de ciudadano, subir 6 fotos a su carpeta del bucket `incidencias` en el mismo día; la sexta debe ser rechazada.
 
+### Correo (SMTP propio)
+
+Sin SMTP propio, el correo de Supabase solo llega a los miembros del equipo de la organización (cualquier otra dirección recibe `email_address_not_authorized`) y a un máximo de 2 por hora. Con Confirm email activo, eso impide que un ciudadano se registre desde la app y que alguien fuera del equipo recupere su contraseña.
+
+Configurado el 23-11-2026 en **Authentication > Emails > SMTP Settings**, con una cuenta de Gmail del equipo:
+
+| Campo | Valor |
+|---|---|
+| Sender email y Username | La dirección de la cuenta de Gmail que envía (la misma en los dos campos) |
+| Sender name | Control de tránsito |
+| Host y Port | `smtp.gmail.com`, `465` |
+| Password | Una **contraseña de aplicación** de esa cuenta, sin espacios |
+
+- Gmail no acepta la contraseña normal de la cuenta por SMTP (responde `535 Username and Password not accepted`). La contraseña de aplicación se crea en **myaccount.google.com > Seguridad > Contraseñas de aplicaciones**, y requiere tener activada la verificación en 2 pasos.
+- Esa contraseña **vive solo en Supabase**: no va en ningún `.env` ni en el repositorio, porque ni la web ni Godot la usan. Si se expone, se borra en la cuenta de Google y se crea otra.
+- Con SMTP propio, el límite de correos sube a 30 por hora (**Authentication > Rate Limits**).
+- Se probó con una invitación desde **Authentication > Users**, que llegó a la bandeja de entrada. Las invitaciones no sirven para crear cuentas reales: el panel no tiene una pantalla para que el invitado elija su contraseña.
+
 ## 2. Cuentas del personal
 
 El panel no tiene registro: las cuentas de operador y analista se crean a mano, para que nadie pueda darse un rol a sí mismo.
