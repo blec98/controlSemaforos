@@ -42,3 +42,9 @@ next-env.d.ts
 
 # Plantilla de variables (sin secretos)
 !.env.example
+
+# Archivos de agentes de IA: son instrucciones para herramientas, no parte del proyecto.
+# Next 16 vuelve a crear AGENTS.md al correr `next dev`; queda solo en cada equipo.
+AGENTS.md
+CLAUDE.md
+.claude/
