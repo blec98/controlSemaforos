@@ -87,13 +87,13 @@ Importar el repositorio en Vercel y cargar las mismas cuatro variables en **Sett
 
 Ninguna de las dos rutas públicas tiene límite en el código: en Vercel cada solicitud puede caer en una instancia distinta, así que un contador en memoria no sirve. El límite se configura en las plataformas.
 
-- **`/api/ingesta`, en Vercel.** En **Firewall**, crear una regla: si la ruta es `/api/ingesta`, aplicar *Rate Limit* por IP de 10 solicitudes por segundo y responder 429. Godot envía cerca de 1 por segundo, así que no lo afecta. Revisar en el panel que el plan de la cuenta permita reglas con límite de tasa. El token de ingesta (32 bytes aleatorios) no se puede adivinar por fuerza bruta en ningún plazo realista; el límite evita sobre todo que alguien con el token robado inunde la base con lotes de 512 KB.
+- **`/api/ingesta`, en Vercel.** Regla publicada el 23-11-2026 en **Firewall** (plan Hobby): *Límite de ingesta*. Si la ruta es igual a `/api/ingesta`, aplica *Rate Limit* de ventana fija, **300 solicitudes cada 60 s por IP**, y responde 429. Godot envía cerca de 1 por segundo, más un envío extra en cada cambio de fase, así que tiene margen de sobra. El token de ingesta (32 bytes aleatorios) no se puede adivinar por fuerza bruta en ningún plazo realista; el límite evita sobre todo que alguien con el token robado inunde la base con lotes de 512 KB.
 - **Inicio de sesión, en Supabase.** En **Authentication > Rate Limits**, revisar el límite de inicios de sesión por IP y anotarlo aquí: ____ por ____.
 
-Para comprobar la regla de Vercel, 50 solicitudes seguidas con un token inválido deben terminar en 429:
+Para comprobar la regla, 350 solicitudes con un token inválido, 20 a la vez para que caigan en la misma ventana, deben terminar en parte con 401 y el resto con 429. El 23-11-2026 dieron 276 con 401 y 74 con 429: Vercel cuenta de forma aproximada entre sus servidores, así que el corte puede caer algo antes de 300. Después de la prueba, la IP que la corre queda bloqueada hasta que termina la ventana.
 
 ```bash
-for i in $(seq 1 50); do curl -s -o /dev/null -w "%{http_code} " -X POST -H "Authorization: Bearer invalido" https://control-semaforos.vercel.app/api/ingesta; done
+seq 1 350 | xargs -P 20 -I{} curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "Authorization: Bearer invalido" https://control-semaforos.vercel.app/api/ingesta | sort | uniq -c
 ```
 
 ### Integración continua
